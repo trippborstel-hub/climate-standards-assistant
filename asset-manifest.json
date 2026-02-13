@@ -1,10 +1,10 @@
 {
   "files": {
-    "main.js": "/climate-standards-assistant/static/js/main.3414719b.js",
+    "main.js": "/climate-standards-assistant/static/js/main.d910aa49.js",
     "index.html": "/climate-standards-assistant/index.html",
-    "main.3414719b.js.map": "/climate-standards-assistant/static/js/main.3414719b.js.map"
+    "main.d910aa49.js.map": "/climate-standards-assistant/static/js/main.d910aa49.js.map"
   },
   "entrypoints": [
-    "static/js/main.3414719b.js"
+    "static/js/main.d910aa49.js"
   ]
 }

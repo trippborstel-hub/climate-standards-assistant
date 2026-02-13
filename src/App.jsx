@@ -541,6 +541,8 @@ function App() {
   const [selectedStandard, setSelectedStandard] = useState(null);
   const [selectedComparison, setSelectedComparison] = useState(null);
   const [timelineFilter, setTimelineFilter] = useState("all");
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("csa-api-key") || "");
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
   const [prepForm, setPrepForm] = useState({
     clientName: "",
     industry: "Consumer Products",
@@ -551,6 +553,12 @@ function App() {
   });
   const [briefing, setBriefing] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+
+  // Save API key to localStorage whenever it changes
+  useEffect(() => {
+    if (apiKey) localStorage.setItem("csa-api-key", apiKey);
+    else localStorage.removeItem("csa-api-key");
+  }, [apiKey]);
   const chatEndRef = useRef(null);
 
   const industries = [
@@ -664,19 +672,34 @@ Generate a briefing with these sections:
 
 Be specific, authoritative, and practical. Use the exact standard names and cite specific requirements. Format for quick scanning — use bold, short paragraphs, no fluff. This is for an MD who needs to sound knowledgeable in 5 minutes.`;
 
+    if (!apiKey) {
+      setBriefing("Please set your Claude API key first (click the 🔑 button in the header).");
+      setBriefingLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 4096,
           messages: [{ role: "user", content: prompt }]
         })
       });
       const data = await response.json();
-      const text = data.content?.map(c => c.text || "").join("\n") || "Unable to generate briefing.";
-      setBriefing(text);
+      if (data.error) {
+        setBriefing(`API Error: ${data.error.message}`);
+      } else {
+        const text = data.content?.map(c => c.text || "").join("\n") || "Unable to generate briefing.";
+        setBriefing(text);
+      }
     } catch (err) {
       setBriefing("Error generating briefing. Please try again.");
     }
@@ -686,6 +709,13 @@ Be specific, authoritative, and practical. Use the exact standard names and cite
   // --- AI CHAT ---
   const handleChat = async () => {
     if (!chatInput.trim() || chatLoading) return;
+
+    if (!apiKey) {
+      setChatMessages(prev => [...prev, { role: "user", content: chatInput.trim() }, { role: "assistant", content: "Please set your Claude API key first (click the 🔑 button in the header)." }]);
+      setChatInput("");
+      return;
+    }
+
     const userMsg = chatInput.trim();
     setChatInput("");
     setChatMessages(prev => [...prev, { role: "user", content: userMsg }]);
@@ -724,17 +754,26 @@ INSTRUCTIONS:
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true"
+        },
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
+          max_tokens: 4096,
           system: systemPrompt,
           messages
         })
       });
       const data = await response.json();
-      const text = data.content?.map(c => c.text || "").join("\n") || "I wasn't able to process that query.";
-      setChatMessages(prev => [...prev, { role: "assistant", content: text }]);
+      if (data.error) {
+        setChatMessages(prev => [...prev, { role: "assistant", content: `API Error: ${data.error.message}` }]);
+      } else {
+        const text = data.content?.map(c => c.text || "").join("\n") || "I wasn't able to process that query.";
+        setChatMessages(prev => [...prev, { role: "assistant", content: text }]);
+      }
     } catch (err) {
       setChatMessages(prev => [...prev, { role: "assistant", content: "Error connecting to AI. Please try again." }]);
     }
@@ -922,7 +961,7 @@ INSTRUCTIONS:
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontWeight: 700, color: "#0a0f1a"
           }}>C</div>
-          <div>
+          <div style={{ flex: 1 }}>
             <div style={{ fontFamily: "'Playfair Display', serif", fontSize: 18, fontWeight: 700, color: "#f1f5f9", letterSpacing: "-0.02em" }}>
               Climate Standards Intelligence
             </div>
@@ -930,7 +969,54 @@ INSTRUCTIONS:
               Consumer & Retail Sector Focus
             </div>
           </div>
+          <button
+            onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+            style={{
+              background: apiKey ? "rgba(56,189,159,0.15)" : "rgba(240,180,41,0.15)",
+              border: `1px solid ${apiKey ? "rgba(56,189,159,0.3)" : "rgba(240,180,41,0.3)"}`,
+              borderRadius: 10,
+              padding: "6px 12px",
+              fontSize: 13,
+              color: apiKey ? "#38bd9f" : "#f0b429",
+              cursor: "pointer",
+              fontFamily: "'DM Sans', sans-serif",
+              fontWeight: 500,
+              display: "flex", alignItems: "center", gap: 6,
+              whiteSpace: "nowrap"
+            }}
+          >
+            🔑 {apiKey ? "API Key Set" : "Set API Key"}
+          </button>
         </div>
+
+        {showApiKeyInput && (
+          <div className="glass-panel" style={{ padding: 14, marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              className="input-field"
+              type="password"
+              placeholder="Paste your Claude API key (sk-ant-...)"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            {apiKey && (
+              <button
+                className="btn-secondary"
+                onClick={() => { setApiKey(""); }}
+                style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              >
+                Clear
+              </button>
+            )}
+            <button
+              className="btn-primary"
+              onClick={() => setShowApiKeyInput(false)}
+              style={{ fontSize: 12, whiteSpace: "nowrap" }}
+            >
+              Done
+            </button>
+          </div>
+        )}
 
         {/* TABS */}
         <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 12 }}>
